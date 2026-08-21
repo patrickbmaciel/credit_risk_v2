@@ -1,0 +1,7 @@
+﻿variavel,idade,renda_anual,valor_emprestimo,taxa_juros_emprestimo,percentual_renda_emprestimo,duracao_historico_credito
+idade,1.0,0.14,0.06,0.01,-0.04,0.88
+renda_anual,0.14,1.0,0.32,-0.0,-0.3,0.12
+valor_emprestimo,0.06,0.32,1.0,0.15,0.58,0.05
+taxa_juros_emprestimo,0.01,-0.0,0.15,1.0,0.12,0.02
+percentual_renda_emprestimo,-0.04,-0.3,0.58,0.12,1.0,-0.03
+duracao_historico_credito,0.88,0.12,0.05,0.02,-0.03,1.0

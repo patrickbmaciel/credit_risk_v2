@@ -1,0 +1,89 @@
+﻿modelo,estrategia,variavel,importancia
+Árvore de Decisão,original,idade,0.04110348
+Árvore de Decisão,original,renda_anual,0.12427287
+Árvore de Decisão,original,tempo_emprego,0.05361478
+Árvore de Decisão,original,valor_emprestimo,0.04140487
+Árvore de Decisão,original,taxa_juros_emprestimo,0.17733609
+Árvore de Decisão,original,percentual_renda_emprestimo,0.23459956
+Árvore de Decisão,original,historico_inadimplencia,0.00421737
+Árvore de Decisão,original,duracao_historico_credito,0.02594507
+Árvore de Decisão,original,residencia_hipoteca,0.08107934
+Árvore de Decisão,original,residencia_outro,0.00049804
+Árvore de Decisão,original,residencia_propria,0.06499303
+Árvore de Decisão,original,intencao_emprestimo_educacao,0.01159805
+Árvore de Decisão,original,intencao_emprestimo_empreendimento,0.00956243
+Árvore de Decisão,original,intencao_emprestimo_medico,0.02702674
+Árvore de Decisão,original,intencao_emprestimo_melhoria_residencial,0.02205196
+Árvore de Decisão,original,intencao_emprestimo_pessoal,0.01746344
+Árvore de Decisão,original,classificacao_emprestimo_B,0.00261709
+Árvore de Decisão,original,classificacao_emprestimo_C,0.03579517
+Árvore de Decisão,original,classificacao_emprestimo_D,0.02044658
+Árvore de Decisão,original,classificacao_emprestimo_E,0.00176777
+Árvore de Decisão,original,classificacao_emprestimo_F,0.00080772
+Árvore de Decisão,original,classificacao_emprestimo_G,0.00179853
+Árvore de Decisão,balanceado,idade,0.04852225
+Árvore de Decisão,balanceado,renda_anual,0.15994771
+Árvore de Decisão,balanceado,tempo_emprego,0.04891808
+Árvore de Decisão,balanceado,valor_emprestimo,0.0499633
+Árvore de Decisão,balanceado,taxa_juros_emprestimo,0.25105319
+Árvore de Decisão,balanceado,percentual_renda_emprestimo,0.20968725
+Árvore de Decisão,balanceado,historico_inadimplencia,0.00623245
+Árvore de Decisão,balanceado,duracao_historico_credito,0.03360149
+Árvore de Decisão,balanceado,residencia_hipoteca,0.03461721
+Árvore de Decisão,balanceado,residencia_outro,0.00013922
+Árvore de Decisão,balanceado,residencia_propria,0.02907064
+Árvore de Decisão,balanceado,intencao_emprestimo_educacao,0.01505392
+Árvore de Decisão,balanceado,intencao_emprestimo_empreendimento,0.01585434
+Árvore de Decisão,balanceado,intencao_emprestimo_medico,0.01563803
+Árvore de Decisão,balanceado,intencao_emprestimo_melhoria_residencial,0.01827247
+Árvore de Decisão,balanceado,intencao_emprestimo_pessoal,0.01453029
+Árvore de Decisão,balanceado,classificacao_emprestimo_B,0.00179794
+Árvore de Decisão,balanceado,classificacao_emprestimo_C,0.02361066
+Árvore de Decisão,balanceado,classificacao_emprestimo_D,0.01983664
+Árvore de Decisão,balanceado,classificacao_emprestimo_E,0.00156147
+Árvore de Decisão,balanceado,classificacao_emprestimo_F,0.00099512
+Árvore de Decisão,balanceado,classificacao_emprestimo_G,0.00109632
+Random Forest,original,idade,0.04943601
+Random Forest,original,renda_anual,0.13268771
+Random Forest,original,tempo_emprego,0.06233376
+Random Forest,original,valor_emprestimo,0.0781784
+Random Forest,original,taxa_juros_emprestimo,0.14804054
+Random Forest,original,percentual_renda_emprestimo,0.22154548
+Random Forest,original,historico_inadimplencia,0.01218362
+Random Forest,original,duracao_historico_credito,0.03891376
+Random Forest,original,residencia_hipoteca,0.05582764
+Random Forest,original,residencia_outro,0.00058706
+Random Forest,original,residencia_propria,0.03640611
+Random Forest,original,intencao_emprestimo_educacao,0.0163559
+Random Forest,original,intencao_emprestimo_empreendimento,0.01454402
+Random Forest,original,intencao_emprestimo_medico,0.01652287
+Random Forest,original,intencao_emprestimo_melhoria_residencial,0.01379182
+Random Forest,original,intencao_emprestimo_pessoal,0.01364603
+Random Forest,original,classificacao_emprestimo_B,0.00503104
+Random Forest,original,classificacao_emprestimo_C,0.01644598
+Random Forest,original,classificacao_emprestimo_D,0.05141161
+Random Forest,original,classificacao_emprestimo_E,0.01142579
+Random Forest,original,classificacao_emprestimo_F,0.00293439
+Random Forest,original,classificacao_emprestimo_G,0.00175045
+Random Forest,balanceado,idade,0.05120584
+Random Forest,balanceado,renda_anual,0.1448675
+Random Forest,balanceado,tempo_emprego,0.05687232
+Random Forest,balanceado,valor_emprestimo,0.07808613
+Random Forest,balanceado,taxa_juros_emprestimo,0.17142021
+Random Forest,balanceado,percentual_renda_emprestimo,0.21637972
+Random Forest,balanceado,historico_inadimplencia,0.01515272
+Random Forest,balanceado,duracao_historico_credito,0.04087747
+Random Forest,balanceado,residencia_hipoteca,0.04049913
+Random Forest,balanceado,residencia_outro,0.000568
+Random Forest,balanceado,residencia_propria,0.02596439
+Random Forest,balanceado,intencao_emprestimo_educacao,0.01366438
+Random Forest,balanceado,intencao_emprestimo_empreendimento,0.0161271
+Random Forest,balanceado,intencao_emprestimo_medico,0.01060712
+Random Forest,balanceado,intencao_emprestimo_melhoria_residencial,0.01391482
+Random Forest,balanceado,intencao_emprestimo_pessoal,0.01157204
+Random Forest,balanceado,classificacao_emprestimo_B,0.00730048
+Random Forest,balanceado,classificacao_emprestimo_C,0.01672522
+Random Forest,balanceado,classificacao_emprestimo_D,0.05342724
+Random Forest,balanceado,classificacao_emprestimo_E,0.01113285
+Random Forest,balanceado,classificacao_emprestimo_F,0.00252673
+Random Forest,balanceado,classificacao_emprestimo_G,0.00110857

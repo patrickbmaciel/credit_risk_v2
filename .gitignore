@@ -1,0 +1,18 @@
+# Caches do Python
+__pycache__/
+*.py[cod]
+
+# Ambientes virtuais locais
+.venv/
+venv/
+
+# Credenciais do Kaggle
+.kaggle/
+kaggle.json
+access_token
+
+# Arquivos temporários de editores e sistema
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+
