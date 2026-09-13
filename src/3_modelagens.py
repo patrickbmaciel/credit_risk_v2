@@ -8,14 +8,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import shap
 from imblearn.over_sampling import RandomOverSampler
+from lightgbm import LGBMClassifier
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     confusion_matrix,
     f1_score,
+    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -27,6 +31,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.utils.class_weight import compute_sample_weight
+from xgboost import XGBClassifier
 
 # Definindo o estilo visual comum às figuras de avaliação
 sns.set_theme(style="whitegrid")
@@ -74,13 +79,22 @@ variaveis_numericas = [
     if coluna not in variaveis_categoricas + [variavel_alvo]
 ]
 
-# Definindo função que calcula métricas, matriz de confusão e pontos da curva ROC, onde:
+# Definindo função que calcula métricas, lucro, matriz de confusão e pontos
+# das curvas ROC e precisão-recall, onde:
 # modelo: modelo já treinado;
 # x_teste_modelo: variáveis explicativas do teste, preparadas conforme o modelo;
+# x_teste_original: variáveis explicativas do teste antes da preparação;
 # y_teste: resultados reais do teste;
 # nome: nome do algoritmo, como "Regressão Logística";
 # estrategia: versão avaliada, como "Original" ou "Balanceada".
-def calcular_resultados(modelo, x_teste_modelo, y_teste, nome, estrategia):
+def calcular_resultados(
+    modelo,
+    x_teste_modelo,
+    x_teste_original,
+    y_teste,
+    nome,
+    estrategia,
+):
     # Localizando a coluna de probabilidades da classe positiva igual a um
     indice_classe_positiva = int(np.flatnonzero(modelo.classes_ == 1)[0])
     # Calculando a probabilidade de inadimplência para cada observação de teste
@@ -95,13 +109,37 @@ def calcular_resultados(modelo, x_teste_modelo, y_teste, nome, estrategia):
     verdadeiro_negativo, falso_positivo, falso_negativo, verdadeiro_positivo = (
         matriz.ravel()
     )
+    # Separando os valores e as taxas dos empréstimos avaliados
+    valores_emprestimos = x_teste_original["valor_emprestimo"].to_numpy()
+    taxas_juros = (
+        x_teste_original["taxa_juros_emprestimo"].to_numpy() / 100
+    )
+    resultados_reais = y_teste.to_numpy()
+    # Calculando o resultado financeiro dos empréstimos que seriam aprovados
+    lucros_emprestimos = np.where(
+        (previsoes == 0) & (resultados_reais == 0),
+        valores_emprestimos * taxas_juros,
+        np.where(
+            (previsoes == 0) & (resultados_reais == 1),
+            -valores_emprestimos,
+            0,
+        ),
+    )
+    # Somando os juros recebidos e as perdas com inadimplência
+    lucro = float(lucros_emprestimos.sum())
     # Calculando os pontos usados para desenhar a curva ROC
     falso_positivo_roc, verdadeiro_positivo_roc, _ = roc_curve(
         y_teste,
         probabilidades,
         pos_label=1,
     )
-    # Reunindo as contagens e métricas do modelo em um dicionário
+    # Calculando os pontos usados para desenhar a curva precisão-recall
+    precisao_pr, recall_pr, _ = precision_recall_curve(
+        y_teste,
+        probabilidades,
+        pos_label=1,
+    )
+    # Reunindo as contagens, o lucro e as métricas do modelo em um dicionário
     metricas = {
         "modelo": nome,
         "estrategia": estrategia,
@@ -109,6 +147,7 @@ def calcular_resultados(modelo, x_teste_modelo, y_teste, nome, estrategia):
         "falso_positivo": int(falso_positivo),
         "falso_negativo": int(falso_negativo),
         "verdadeiro_positivo": int(verdadeiro_positivo),
+        "lucro": lucro,
         "acuracia": accuracy_score(y_teste, previsoes),
         "precisao": precision_score(
             y_teste,
@@ -129,9 +168,19 @@ def calcular_resultados(modelo, x_teste_modelo, y_teste, nome, estrategia):
             zero_division=0,
         ),
         "roc_auc": roc_auc_score(y_teste, probabilidades),
+        "pr_auc": average_precision_score(
+            y_teste,
+            probabilidades,
+            pos_label=1,
+        ),
     }
-    # Reunindo as duas coordenadas da curva ROC
-    curva = (falso_positivo_roc, verdadeiro_positivo_roc)
+    # Reunindo as coordenadas das curvas ROC e precisão-recall
+    curva = (
+        falso_positivo_roc,
+        verdadeiro_positivo_roc,
+        recall_pr,
+        precisao_pr,
+    )
     # Devolvendo todos os resultados necessários para tabelas e figuras
     return metricas, matriz, curva
 
@@ -297,6 +346,7 @@ modelo_logistico_original.fit(x_treino_geral, y_treino)
 ) = calcular_resultados(
     modelo_logistico_original,
     x_teste_geral,
+    x_teste,
     y_teste,
     "Regressão Logística",
     "original",
@@ -321,6 +371,7 @@ modelo_logistico_balanceado.fit(x_treino_geral, y_treino)
 ) = calcular_resultados(
     modelo_logistico_balanceado,
     x_teste_geral,
+    x_teste,
     y_teste,
     "Regressão Logística",
     "balanceado",
@@ -342,6 +393,7 @@ metricas_arvore_original, matriz_arvore_original, curva_arvore_original = (
     calcular_resultados(
         modelo_arvore_original,
         x_teste_geral,
+        x_teste,
         y_teste,
         "Árvore de Decisão",
         "original",
@@ -365,6 +417,7 @@ modelo_arvore_balanceada.fit(x_treino_geral, y_treino)
 ) = calcular_resultados(
     modelo_arvore_balanceada,
     x_teste_geral,
+    x_teste,
     y_teste,
     "Árvore de Decisão",
     "balanceado",
@@ -383,6 +436,7 @@ metricas_naive_original, matriz_naive_original, curva_naive_original = (
     calcular_resultados(
         modelo_naive_original,
         x_teste_geral,
+        x_teste,
         y_teste,
         "Gaussian Naive Bayes",
         "original",
@@ -407,6 +461,7 @@ modelo_naive_balanceado.fit(
 ) = calcular_resultados(
     modelo_naive_balanceado,
     x_teste_geral,
+    x_teste,
     y_teste,
     "Gaussian Naive Bayes",
     "balanceado",
@@ -425,6 +480,7 @@ metricas_knn_original, matriz_knn_original, curva_knn_original = (
     calcular_resultados(
         modelo_knn_original,
         x_teste_knn,
+        x_teste,
         y_teste,
         "KNN",
         "original",
@@ -445,6 +501,7 @@ metricas_knn_balanceada, matriz_knn_balanceada, curva_knn_balanceada = (
     calcular_resultados(
         modelo_knn_balanceado,
         x_teste_knn,
+        x_teste,
         y_teste,
         "KNN",
         "balanceado",
@@ -469,6 +526,7 @@ metricas_forest_original, matriz_forest_original, curva_forest_original = (
     calcular_resultados(
         modelo_forest_original,
         x_teste_geral,
+        x_teste,
         y_teste,
         "Random Forest",
         "original",
@@ -494,12 +552,127 @@ modelo_forest_balanceado.fit(x_treino_geral, y_treino)
 ) = calcular_resultados(
     modelo_forest_balanceado,
     x_teste_geral,
+    x_teste,
     y_teste,
     "Random Forest",
     "balanceado",
 )
 
-# 10) Tabela de métricas
+# 10) XGBoost
+
+# Criando o XGBoost com 100 árvores e o treino original
+modelo_xgboost_original = XGBClassifier(
+    n_estimators=100,
+    objective="binary:logistic",
+    eval_metric="logloss",
+    random_state=semente,
+    n_jobs=1,
+)
+
+# Treinando o XGBoost original
+modelo_xgboost_original.fit(x_treino_geral, y_treino)
+
+# Avaliando o XGBoost original no conjunto de teste
+metricas_xgboost_original, matriz_xgboost_original, curva_xgboost_original = (
+    calcular_resultados(
+        modelo_xgboost_original,
+        x_teste_geral,
+        x_teste,
+        y_teste,
+        "XGBoost",
+        "original",
+    )
+)
+
+# Criando o XGBoost que receberá os pesos balanceados
+modelo_xgboost_balanceado = XGBClassifier(
+    n_estimators=100,
+    objective="binary:logistic",
+    eval_metric="logloss",
+    random_state=semente,
+    n_jobs=1,
+)
+
+# Treinando o XGBoost balanceado com os pesos calculados no treino
+modelo_xgboost_balanceado.fit(
+    x_treino_geral,
+    y_treino,
+    sample_weight=pesos_balanceados,
+)
+
+# Avaliando o XGBoost balanceado no mesmo conjunto de teste
+(
+    metricas_xgboost_balanceado,
+    matriz_xgboost_balanceado,
+    curva_xgboost_balanceado,
+) = calcular_resultados(
+    modelo_xgboost_balanceado,
+    x_teste_geral,
+    x_teste,
+    y_teste,
+    "XGBoost",
+    "balanceado",
+)
+
+# 11) LightGBM
+
+# Criando o LightGBM com 100 árvores e o treino original
+modelo_lightgbm_original = LGBMClassifier(
+    n_estimators=100,
+    objective="binary",
+    random_state=semente,
+    n_jobs=1,
+    verbosity=-1,
+)
+
+# Treinando o LightGBM original
+modelo_lightgbm_original.fit(x_treino_geral, y_treino)
+
+# Avaliando o LightGBM original no conjunto de teste
+(
+    metricas_lightgbm_original,
+    matriz_lightgbm_original,
+    curva_lightgbm_original,
+) = calcular_resultados(
+    modelo_lightgbm_original,
+    x_teste_geral,
+    x_teste,
+    y_teste,
+    "LightGBM",
+    "original",
+)
+
+# Criando o LightGBM que receberá os pesos balanceados
+modelo_lightgbm_balanceado = LGBMClassifier(
+    n_estimators=100,
+    objective="binary",
+    random_state=semente,
+    n_jobs=1,
+    verbosity=-1,
+)
+
+# Treinando o LightGBM balanceado com os pesos calculados no treino
+modelo_lightgbm_balanceado.fit(
+    x_treino_geral,
+    y_treino,
+    sample_weight=pesos_balanceados,
+)
+
+# Avaliando o LightGBM balanceado no mesmo conjunto de teste
+(
+    metricas_lightgbm_balanceado,
+    matriz_lightgbm_balanceado,
+    curva_lightgbm_balanceado,
+) = calcular_resultados(
+    modelo_lightgbm_balanceado,
+    x_teste_geral,
+    x_teste,
+    y_teste,
+    "LightGBM",
+    "balanceado",
+)
+
+# 12) Tabela de métricas
 
 # Reunindo as métricas na ordem usada para comparar os modelos
 linhas_metricas = [
@@ -513,16 +686,52 @@ linhas_metricas = [
     metricas_knn_balanceada,
     metricas_forest_original,
     metricas_forest_balanceada,
+    metricas_xgboost_original,
+    metricas_xgboost_balanceado,
+    metricas_lightgbm_original,
+    metricas_lightgbm_balanceado,
 ]
 
-# Transformando os resultados em uma tabela com dez linhas
+# Transformando os resultados em uma tabela com 14 linhas
 tabela_metricas = pd.DataFrame(linhas_metricas)
 
+# Localizando o modelo champion pelo maior lucro e, em empate, pelo menor
+# número de falsos negativos
+indice_champion = tabela_metricas.sort_values(
+    ["lucro", "falso_negativo"],
+    ascending=[False, True],
+).index[0]
+
+# Retirando o champion antes de selecionar um challenger distinto
+candidatos_challenger = tabela_metricas.drop(index=indice_champion)
+
+# Localizando o challenger pelo menor número de falsos negativos e, em
+# empate, pelo maior lucro
+indice_challenger = candidatos_challenger.sort_values(
+    ["falso_negativo", "lucro"],
+    ascending=[True, False],
+).index[0]
+
+# Criando uma coluna que identifica os modelos selecionados
+tabela_metricas.insert(2, "papel", "")
+tabela_metricas.loc[indice_champion, "papel"] = "champion"
+tabela_metricas.loc[indice_challenger, "papel"] = "challenger"
+
 # Listando as métricas que devem ser arredondadas
-colunas_decimais = ["acuracia", "precisao", "recall", "f1_score", "roc_auc"]
+colunas_decimais = [
+    "acuracia",
+    "precisao",
+    "recall",
+    "f1_score",
+    "roc_auc",
+    "pr_auc",
+]
 
 # Arredondando as métricas para seis casas decimais
 tabela_metricas[colunas_decimais] = tabela_metricas[colunas_decimais].round(6)
+
+# Arredondando o lucro para duas casas decimais
+tabela_metricas["lucro"] = tabela_metricas["lucro"].round(2)
 
 # Salvando a tabela principal de comparação dos modelos
 tabela_metricas.to_csv(
@@ -531,7 +740,19 @@ tabela_metricas.to_csv(
     encoding="utf-8-sig",
 )
 
-# 11) Coeficientes das Regressões Logísticas
+# Informando as combinações selecionadas como champion e challenger
+print(
+    "Champion:",
+    tabela_metricas.loc[indice_champion, "modelo"],
+    tabela_metricas.loc[indice_champion, "estrategia"],
+)
+print(
+    "Challenger:",
+    tabela_metricas.loc[indice_challenger, "modelo"],
+    tabela_metricas.loc[indice_challenger, "estrategia"],
+)
+
+# 13) Coeficientes das Regressões Logísticas
 
 # Criando uma lista vazia para os coeficientes das duas regressões
 linhas_coeficientes = []
@@ -581,28 +802,28 @@ tabela_coeficientes.to_csv(
     encoding="utf-8-sig",
 )
 
-# 12) Importâncias das Árvores e Random Forests
+# 14) Importâncias dos modelos baseados em árvores
 
-# Nota: A importância das variáveis calculada é a importância por redução
-# de impureza das Árvores de Decisão e Random Forests. Ela mede quanto cada
-# variável contribuiu para criar divisões que separaram inadimplentes e 
-# não inadimplentes durante o treinamento. Os valores são não negativos e
-# normalizados para somar 1 em cada modelo. Quanto maior o valor, mais a 
-# variável participou das decisões da árvore. No Random Forest, o resultado
-# combina as importâncias das várias árvores. Essa medida oferece uma visão
-# global do modelo, mas não informa se a variável aumenta ou reduz a 
-# probabilidade de inadimplência, não representa causalidade e não 
-# corresponde a métodos como SHAP ou LIME.
+# Nota: A importância nativa das variáveis mede quanto cada variável participou
+# das divisões dos modelos baseados em árvores. A forma de cálculo e a escala
+# podem variar entre os algoritmos, por isso os valores devem ser comparados
+# dentro de cada modelo. Essa medida oferece uma visão global, mas não informa
+# se a variável aumenta ou reduz a probabilidade de inadimplência, não
+# representa causalidade e não corresponde a métodos como SHAP ou LIME.
 
 # Criando uma lista vazia para as importâncias das variáveis
 linhas_importancias = []
 
-# Reunindo os quatro modelos que calculam importâncias
+# Reunindo os oito modelos que calculam importâncias
 modelos_importancias = [
     ("Árvore de Decisão", "original", modelo_arvore_original),
     ("Árvore de Decisão", "balanceado", modelo_arvore_balanceada),
     ("Random Forest", "original", modelo_forest_original),
     ("Random Forest", "balanceado", modelo_forest_balanceado),
+    ("XGBoost", "original", modelo_xgboost_original),
+    ("XGBoost", "balanceado", modelo_xgboost_balanceado),
+    ("LightGBM", "original", modelo_lightgbm_original),
+    ("LightGBM", "balanceado", modelo_lightgbm_balanceado),
 ]
 
 # Extraindo as importâncias calculadas por cada modelo
@@ -630,16 +851,95 @@ tabela_importancias["importancia"] = tabela_importancias[
     "importancia"
 ].round(8)
 
-# Salvando as importâncias das árvores e florestas
+# Salvando as importâncias dos modelos baseados em árvores
 tabela_importancias.to_csv(
     "outputs/tables/importancias_variaveis.csv",
     index=False,
     encoding="utf-8-sig",
 )
 
-# 13) Matrizes de confusão e curvas ROC
+# Selecionando as importâncias do modelo champion
+importancias_xgboost_balanceado = tabela_importancias.loc[
+    (tabela_importancias["modelo"] == "XGBoost")
+    & (tabela_importancias["estrategia"] == "balanceado")
+]
 
-# Reunindo os resultados necessários para as figuras dos cinco algoritmos
+# Identificando e ordenando as dez variáveis mais importantes
+importancias_xgboost_balanceado = (
+    importancias_xgboost_balanceado.nlargest(10, "importancia")
+    .sort_values("importancia")
+)
+
+# Criando o gráfico de barras horizontais do modelo champion
+figura_importancias, eixo = plt.subplots(figsize=(10, 7))
+eixo.barh(
+    importancias_xgboost_balanceado["variavel"].str.replace("_", " ").str.capitalize(),
+    importancias_xgboost_balanceado["importancia"],
+    color="darkorange",
+)
+
+# Ajustando o eixo e o título da figura
+eixo.set_xlabel("Importância")
+eixo.set_ylabel("")
+eixo.set_title(
+    "Importâncias das variáveis - XGBoost balanceado",
+    fontweight="bold",
+)
+
+# Ajustando e salvando a figura
+figura_importancias.tight_layout()
+figura_importancias.savefig(
+    "outputs/figures/importancias_xgboost_balanceado_top10.png",
+    dpi=180,
+    bbox_inches="tight",
+)
+
+# 15) SHAP do modelo champion
+
+# Organizando os dados de teste com nomes legíveis para a figura
+x_teste_shap = pd.DataFrame(
+    x_teste_geral,
+    columns=nomes_variaveis_geral,
+)
+x_teste_shap.columns = (
+    x_teste_shap.columns.str.replace("_", " ").str.capitalize()
+)
+
+# Calculando a contribuição de cada variável para as previsões do champion
+explicador_shap = shap.TreeExplainer(modelo_xgboost_balanceado)
+valores_shap = explicador_shap(x_teste_shap)
+
+# Criando o gráfico que mostra a importância e a direção dos impactos
+shap.plots.beeswarm(
+    valores_shap,
+    max_display=10,
+    show=False,
+    plot_size=(10, 7),
+    color_bar_label="Valor da variável",
+    group_remaining_features=False,
+)
+
+# Ajustando os textos da figura
+figura_shap = plt.gcf()
+eixo_shap = plt.gca()
+eixo_shap.set_xlabel("Valor SHAP (impacto na previsão)")
+eixo_shap.set_title(
+    "SHAP do XGBoost balanceado",
+    fontweight="bold",
+)
+figura_shap.axes[-1].set_yticklabels(["Baixo", "Alto"])
+
+# Ajustando e salvando a figura
+figura_shap.tight_layout()
+figura_shap.savefig(
+    "outputs/figures/shap_xgboost_balanceado.png",
+    dpi=180,
+    bbox_inches="tight",
+)
+
+# 16) Matrizes de confusão e curvas ROC
+
+# Reunindo os resultados necessários para as figuras dos sete algoritmos
 comparacoes_modelos = [
     (
         "regressao_logistica",
@@ -650,6 +950,8 @@ comparacoes_modelos = [
         curva_logistica_balanceada,
         metricas_logistica_original["roc_auc"],
         metricas_logistica_balanceada["roc_auc"],
+        metricas_logistica_original["pr_auc"],
+        metricas_logistica_balanceada["pr_auc"],
     ),
     (
         "arvore_decisao",
@@ -660,6 +962,8 @@ comparacoes_modelos = [
         curva_arvore_balanceada,
         metricas_arvore_original["roc_auc"],
         metricas_arvore_balanceada["roc_auc"],
+        metricas_arvore_original["pr_auc"],
+        metricas_arvore_balanceada["pr_auc"],
     ),
     (
         "naive_bayes",
@@ -670,6 +974,8 @@ comparacoes_modelos = [
         curva_naive_balanceada,
         metricas_naive_original["roc_auc"],
         metricas_naive_balanceada["roc_auc"],
+        metricas_naive_original["pr_auc"],
+        metricas_naive_balanceada["pr_auc"],
     ),
     (
         "knn",
@@ -680,6 +986,8 @@ comparacoes_modelos = [
         curva_knn_balanceada,
         metricas_knn_original["roc_auc"],
         metricas_knn_balanceada["roc_auc"],
+        metricas_knn_original["pr_auc"],
+        metricas_knn_balanceada["pr_auc"],
     ),
     (
         "random_forest",
@@ -690,6 +998,32 @@ comparacoes_modelos = [
         curva_forest_balanceada,
         metricas_forest_original["roc_auc"],
         metricas_forest_balanceada["roc_auc"],
+        metricas_forest_original["pr_auc"],
+        metricas_forest_balanceada["pr_auc"],
+    ),
+    (
+        "xgboost",
+        "XGBoost",
+        matriz_xgboost_original,
+        matriz_xgboost_balanceado,
+        curva_xgboost_original,
+        curva_xgboost_balanceado,
+        metricas_xgboost_original["roc_auc"],
+        metricas_xgboost_balanceado["roc_auc"],
+        metricas_xgboost_original["pr_auc"],
+        metricas_xgboost_balanceado["pr_auc"],
+    ),
+    (
+        "lightgbm",
+        "LightGBM",
+        matriz_lightgbm_original,
+        matriz_lightgbm_balanceado,
+        curva_lightgbm_original,
+        curva_lightgbm_balanceado,
+        metricas_lightgbm_original["roc_auc"],
+        metricas_lightgbm_balanceado["roc_auc"],
+        metricas_lightgbm_original["pr_auc"],
+        metricas_lightgbm_balanceado["pr_auc"],
     ),
 ]
 
@@ -706,6 +1040,8 @@ for (
     curva_balanceada,
     area_original,
     area_balanceada,
+    area_pr_original,
+    area_pr_balanceada,
 ) in comparacoes_modelos:
     # Criando duas áreas lado a lado para as matrizes de confusão
     figura_matrizes, eixos = plt.subplots(1, 2, figsize=(11, 4.5))
@@ -733,7 +1069,7 @@ for (
         eixo.set_ylabel("Realidade")
     # Inserindo o título geral das matrizes do algoritmo
     figura_matrizes.suptitle(
-        f"Matrizes de confusão — {titulo_modelo}",
+        f"Matrizes de confusão - {titulo_modelo}",
         fontsize=14,
         fontweight="bold",
     )
@@ -751,7 +1087,7 @@ for (
     # Desenhando uma curva ROC para cada estratégia
     for estrategia, curva, area in curvas_estrategias:
         # Separando as taxas de falsos e verdadeiros positivos
-        falso_positivo_roc, verdadeiro_positivo_roc = curva
+        falso_positivo_roc, verdadeiro_positivo_roc = curva[:2]
         # Desenhando a curva e informando a área na legenda
         eixo.plot(
             falso_positivo_roc,
@@ -767,14 +1103,306 @@ for (
     eixo.set_ylim(0, 1.02)
     eixo.set_xlabel("Taxa de falsos positivos")
     eixo.set_ylabel("Taxa de verdadeiros positivos")
-    eixo.set_title(f"Curvas ROC — {titulo_modelo}", fontweight="bold")
+    eixo.set_title(f"Curvas ROC - {titulo_modelo}", fontweight="bold")
     eixo.legend(loc="lower right")
     # Ajustando e salvando a figura das curvas ROC
     figura_roc.tight_layout()
     caminho_roc = f"outputs/figures/curva_roc_{nome_arquivo}.png"
     figura_roc.savefig(caminho_roc, dpi=180, bbox_inches="tight")
 
-# 14) Visualização das Árvores de Decisão
+# 17) Curvas precisão-recall comparativas
+
+# Definindo uma cor para representar cada algoritmo
+cores_modelos = {
+    "regressao_logistica": "steelblue",
+    "arvore_decisao": "firebrick",
+    "naive_bayes": "saddlebrown",
+    "knn": "mediumpurple",
+    "random_forest": "teal",
+    "xgboost": "darkorange",
+    "lightgbm": "forestgreen",
+}
+
+# Calculando a proporção da classe positiva usada como referência
+proporcao_positiva = (y_teste == 1).mean()
+
+# Criando dois painéis para separar as estratégias original e balanceada
+figura_pr_estrategias, eixos = plt.subplots(1, 2, figsize=(16, 6.5))
+
+# Desenhando as curvas dos sete algoritmos em seus respectivos painéis
+for (
+    nome_arquivo,
+    titulo_modelo,
+    matriz_original,
+    matriz_balanceada,
+    curva_original,
+    curva_balanceada,
+    area_original,
+    area_balanceada,
+    area_pr_original,
+    area_pr_balanceada,
+) in comparacoes_modelos:
+    # Separando recall e precisão da estratégia original
+    recall_original, precisao_original = curva_original[2:]
+    # Desenhando a curva original no primeiro painel
+    eixos[0].plot(
+        recall_original,
+        precisao_original,
+        color=cores_modelos[nome_arquivo],
+        linewidth=2,
+        label=f"{titulo_modelo} (PR-AUC = {area_pr_original:.3f})",
+    )
+    # Separando recall e precisão da estratégia balanceada
+    recall_balanceada, precisao_balanceada = curva_balanceada[2:]
+    # Desenhando a curva balanceada no segundo painel
+    eixos[1].plot(
+        recall_balanceada,
+        precisao_balanceada,
+        color=cores_modelos[nome_arquivo],
+        linewidth=2,
+        label=f"{titulo_modelo} (PR-AUC = {area_pr_balanceada:.3f})",
+    )
+
+# Ajustando os dois painéis e inserindo a referência da classe positiva
+for eixo, titulo in zip(
+    eixos,
+    ["Estratégias originais", "Estratégias balanceadas"],
+):
+    eixo.axhline(
+        proporcao_positiva,
+        color="gray",
+        linestyle="--",
+        label=f"Prevalência = {proporcao_positiva:.3f}",
+    )
+    eixo.set_xlim(0, 1)
+    eixo.set_ylim(0, 1.02)
+    eixo.set_xlabel("Recall")
+    eixo.set_ylabel("Precisão")
+    eixo.set_title(titulo, fontweight="bold")
+    eixo.legend(loc="lower left", fontsize=8)
+
+# Inserindo o título geral e salvando a comparação por estratégia
+figura_pr_estrategias.suptitle(
+    "Curvas precisão-recall por estratégia",
+    fontsize=14,
+    fontweight="bold",
+)
+figura_pr_estrategias.tight_layout()
+figura_pr_estrategias.savefig(
+    "outputs/figures/curvas_pr_por_estrategia.png",
+    dpi=180,
+    bbox_inches="tight",
+)
+
+# Criando um único eixo para destacar champion e challenger
+figura_pr_destaques, eixo = plt.subplots(figsize=(9, 7))
+
+# Desenhando em cinza as 12 combinações que não serão destacadas
+for (
+    nome_arquivo,
+    titulo_modelo,
+    matriz_original,
+    matriz_balanceada,
+    curva_original,
+    curva_balanceada,
+    area_original,
+    area_balanceada,
+    area_pr_original,
+    area_pr_balanceada,
+) in comparacoes_modelos:
+    # Desenhando todas as estratégias originais em cinza
+    recall_original, precisao_original = curva_original[2:]
+    eixo.plot(
+        recall_original,
+        precisao_original,
+        color="lightgray",
+        linewidth=1.2,
+        alpha=0.7,
+    )
+    # Desenhando em cinza as estratégias balanceadas não destacadas
+    if nome_arquivo not in ["xgboost", "lightgbm"]:
+        recall_balanceada, precisao_balanceada = curva_balanceada[2:]
+        eixo.plot(
+            recall_balanceada,
+            precisao_balanceada,
+            color="lightgray",
+            linewidth=1.2,
+            alpha=0.7,
+        )
+
+# Separando e destacando a curva do XGBoost balanceado
+recall_xgboost, precisao_xgboost = curva_xgboost_balanceado[2:]
+eixo.plot(
+    recall_xgboost,
+    precisao_xgboost,
+    color=cores_modelos["xgboost"],
+    linewidth=3,
+    label=(
+        "XGBoost balanceado "
+        f"(PR-AUC = {metricas_xgboost_balanceado['pr_auc']:.3f})"
+    ),
+)
+
+# Separando e destacando a curva do LightGBM balanceado
+recall_lightgbm, precisao_lightgbm = curva_lightgbm_balanceado[2:]
+eixo.plot(
+    recall_lightgbm,
+    precisao_lightgbm,
+    color=cores_modelos["lightgbm"],
+    linewidth=3,
+    label=(
+        "LightGBM balanceado "
+        f"(PR-AUC = {metricas_lightgbm_balanceado['pr_auc']:.3f})"
+    ),
+)
+
+# Inserindo a referência e ajustando o eixo da figura de destaque
+eixo.axhline(
+    proporcao_positiva,
+    color="gray",
+    linestyle="--",
+    label=f"Prevalência = {proporcao_positiva:.3f}",
+)
+eixo.set_xlim(0, 1)
+eixo.set_ylim(0, 1.02)
+eixo.set_xlabel("Recall")
+eixo.set_ylabel("Precisão")
+eixo.set_title(
+    "Curvas precisão-recall - modelos selecionados em destaque",
+    fontweight="bold",
+)
+eixo.legend(loc="lower left")
+
+# Ajustando e salvando a figura de destaque
+figura_pr_destaques.tight_layout()
+figura_pr_destaques.savefig(
+    "outputs/figures/curvas_pr_modelos_destacados.png",
+    dpi=180,
+    bbox_inches="tight",
+)
+
+# 18) Comparação do lucro estimado
+
+# Ordenando os algoritmos pelo maior lucro entre suas duas estratégias
+ordem_modelos_lucro = (
+    tabela_metricas.groupby("modelo")["lucro"]
+    .max()
+    .sort_values(ascending=False)
+    .index.tolist()
+)
+
+# Invertendo a ordem para apresentar o maior lucro na parte superior
+ordem_modelos_lucro = ordem_modelos_lucro[::-1]
+
+# Definindo limites comuns com espaço para os rótulos monetários
+lucro_minimo = min(0, tabela_metricas["lucro"].min())
+lucro_maximo = max(0, tabela_metricas["lucro"].max())
+amplitude_lucro = lucro_maximo - lucro_minimo
+limite_inferior_lucro = lucro_minimo - amplitude_lucro * 0.08
+limite_superior_lucro = lucro_maximo + amplitude_lucro * 0.18
+
+# Criando a figura que compara as estratégias de cada algoritmo
+figura_lucro, eixo = plt.subplots(figsize=(12, 7))
+
+for posicao, modelo in enumerate(ordem_modelos_lucro):
+    linhas_modelo = tabela_metricas.loc[tabela_metricas["modelo"] == modelo]
+    linha_original = linhas_modelo.loc[
+        linhas_modelo["estrategia"] == "original"
+    ].iloc[0]
+    linha_balanceada = linhas_modelo.loc[
+        linhas_modelo["estrategia"] == "balanceado"
+    ].iloc[0]
+
+    # Ligando os lucros das estratégias original e balanceada
+    eixo.plot(
+        [linha_original["lucro"], linha_balanceada["lucro"]],
+        [posicao, posicao],
+        color="lightgray",
+        linewidth=2,
+        zorder=1,
+    )
+
+    # Desenhando os pontos das duas estratégias
+    eixo.scatter(
+        linha_original["lucro"],
+        posicao,
+        color="steelblue",
+        edgecolor="black",
+        s=90,
+        zorder=2,
+        label="Original" if posicao == 0 else None,
+    )
+    eixo.scatter(
+        linha_balanceada["lucro"],
+        posicao,
+        color="darkorange",
+        edgecolor="black",
+        s=90,
+        zorder=2,
+        label="Balanceado" if posicao == 0 else None,
+    )
+
+    # Formatando e apresentando os lucros em milhões
+    rotulo_original = (
+        f"$ {abs(linha_original['lucro']) / 1_000_000:.2f} mi"
+    ).replace(".", ",")
+    if linha_original["lucro"] < 0:
+        rotulo_original = f"-{rotulo_original}"
+
+    rotulo_balanceado = (
+        f"$ {abs(linha_balanceada['lucro']) / 1_000_000:.2f} mi"
+    ).replace(".", ",")
+    if linha_balanceada["lucro"] < 0:
+        rotulo_balanceado = f"-{rotulo_balanceado}"
+
+    eixo.annotate(
+        rotulo_original,
+        (linha_original["lucro"], posicao),
+        xytext=(0, 9),
+        textcoords="offset points",
+        ha="center",
+        fontsize=8,
+    )
+    eixo.annotate(
+        rotulo_balanceado,
+        (linha_balanceada["lucro"], posicao),
+        xytext=(0, -14),
+        textcoords="offset points",
+        ha="center",
+        fontsize=8,
+    )
+
+# Criando e formatando as marcações do eixo em milhões
+passo_eixo_lucro = 2_000_000
+marcacoes_lucro = np.arange(
+    np.ceil(limite_inferior_lucro / passo_eixo_lucro) * passo_eixo_lucro,
+    limite_superior_lucro,
+    passo_eixo_lucro,
+)
+rotulos_eixo_lucro = [
+    f"$ {valor / 1_000_000:.1f} mi".replace(".", ",")
+    for valor in marcacoes_lucro
+]
+
+# Ajustando os elementos visuais e salvando a figura
+eixo.axvline(0, color="black", linewidth=1)
+eixo.set_xlim(limite_inferior_lucro, limite_superior_lucro)
+eixo.set_yticks(range(len(ordem_modelos_lucro)))
+eixo.set_yticklabels(ordem_modelos_lucro)
+eixo.set_xticks(marcacoes_lucro)
+eixo.set_xticklabels(rotulos_eixo_lucro)
+eixo.set_xlabel("Lucro estimado ($)")
+eixo.set_ylabel("")
+eixo.set_title("Efeito da estratégia no lucro", fontweight="bold")
+eixo.legend(loc="lower right")
+figura_lucro.tight_layout()
+figura_lucro.savefig(
+    "outputs/figures/lucro_pontos_conectados.png",
+    dpi=180,
+    bbox_inches="tight",
+)
+
+# 19) Visualização das Árvores de Decisão
 
 # Criando duas áreas para comparar as versões original e balanceada
 figura_arvores, eixos = plt.subplots(1, 2, figsize=(28, 10))
@@ -813,7 +1441,7 @@ eixos[1].set_title("Árvore balanceado", fontweight="bold")
 
 # Inserindo o título geral da comparação das árvores
 figura_arvores.suptitle(
-    "Árvores de Decisão — três primeiros níveis",
+    "Árvores de Decisão - três primeiros níveis",
     fontsize=16,
     fontweight="bold",
 )

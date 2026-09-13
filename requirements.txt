@@ -5,4 +5,6 @@ seaborn
 scikit-learn
 imbalanced-learn
 kagglehub
-
+xgboost
+lightgbm
+shap
