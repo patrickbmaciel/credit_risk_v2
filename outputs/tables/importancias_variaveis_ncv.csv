@@ -1,0 +1,177 @@
+﻿modelo,estrategia,variavel,importancia
+Árvore de Decisão,original,idade,0.04541439
+Árvore de Decisão,original,renda_anual,0.12849196
+Árvore de Decisão,original,tempo_emprego,0.05646095
+Árvore de Decisão,original,valor_emprestimo,0.04202798
+Árvore de Decisão,original,taxa_juros_emprestimo,0.17875963
+Árvore de Decisão,original,percentual_renda_emprestimo,0.23460681
+Árvore de Decisão,original,historico_inadimplencia,0.0047847
+Árvore de Decisão,original,duracao_historico_credito,0.02691663
+Árvore de Decisão,original,residencia_hipoteca,0.07886691
+Árvore de Decisão,original,residencia_outro,0.00086782
+Árvore de Decisão,original,residencia_propria,0.06207071
+Árvore de Decisão,original,intencao_emprestimo_educacao,0.01286683
+Árvore de Decisão,original,intencao_emprestimo_empreendimento,0.01019895
+Árvore de Decisão,original,intencao_emprestimo_medico,0.02736627
+Árvore de Decisão,original,intencao_emprestimo_melhoria_residencial,0.02565138
+Árvore de Decisão,original,intencao_emprestimo_pessoal,0.01698725
+Árvore de Decisão,original,classificacao_emprestimo_B,0.00225974
+Árvore de Decisão,original,classificacao_emprestimo_C,0.0194648
+Árvore de Decisão,original,classificacao_emprestimo_D,0.02096735
+Árvore de Decisão,original,classificacao_emprestimo_E,0.00123017
+Árvore de Decisão,original,classificacao_emprestimo_F,0.00097762
+Árvore de Decisão,original,classificacao_emprestimo_G,0.00276115
+Árvore de Decisão,balanceado,idade,0.04705895
+Árvore de Decisão,balanceado,renda_anual,0.16630688
+Árvore de Decisão,balanceado,tempo_emprego,0.04811808
+Árvore de Decisão,balanceado,valor_emprestimo,0.04280411
+Árvore de Decisão,balanceado,taxa_juros_emprestimo,0.25600918
+Árvore de Decisão,balanceado,percentual_renda_emprestimo,0.21337773
+Árvore de Decisão,balanceado,historico_inadimplencia,0.00656732
+Árvore de Decisão,balanceado,duracao_historico_credito,0.0295044
+Árvore de Decisão,balanceado,residencia_hipoteca,0.0360968
+Árvore de Decisão,balanceado,residencia_outro,0.00027733
+Árvore de Decisão,balanceado,residencia_propria,0.02974396
+Árvore de Decisão,balanceado,intencao_emprestimo_educacao,0.01261104
+Árvore de Decisão,balanceado,intencao_emprestimo_empreendimento,0.01525343
+Árvore de Decisão,balanceado,intencao_emprestimo_medico,0.01549044
+Árvore de Decisão,balanceado,intencao_emprestimo_melhoria_residencial,0.01878273
+Árvore de Decisão,balanceado,intencao_emprestimo_pessoal,0.01367509
+Árvore de Decisão,balanceado,classificacao_emprestimo_B,0.00115162
+Árvore de Decisão,balanceado,classificacao_emprestimo_C,0.02564946
+Árvore de Decisão,balanceado,classificacao_emprestimo_D,0.01938191
+Árvore de Decisão,balanceado,classificacao_emprestimo_E,0.00041474
+Árvore de Decisão,balanceado,classificacao_emprestimo_F,0.00069829
+Árvore de Decisão,balanceado,classificacao_emprestimo_G,0.0010265
+Random Forest,original,idade,0.04878849
+Random Forest,original,renda_anual,0.13537793
+Random Forest,original,tempo_emprego,0.06097672
+Random Forest,original,valor_emprestimo,0.07321863
+Random Forest,original,taxa_juros_emprestimo,0.14499051
+Random Forest,original,percentual_renda_emprestimo,0.22625525
+Random Forest,original,historico_inadimplencia,0.01138276
+Random Forest,original,duracao_historico_credito,0.03783277
+Random Forest,original,residencia_hipoteca,0.0585374
+Random Forest,original,residencia_outro,0.00073248
+Random Forest,original,residencia_propria,0.03720022
+Random Forest,original,intencao_emprestimo_educacao,0.01589834
+Random Forest,original,intencao_emprestimo_empreendimento,0.01292537
+Random Forest,original,intencao_emprestimo_medico,0.01664828
+Random Forest,original,intencao_emprestimo_melhoria_residencial,0.01463078
+Random Forest,original,intencao_emprestimo_pessoal,0.0133795
+Random Forest,original,classificacao_emprestimo_B,0.00440639
+Random Forest,original,classificacao_emprestimo_C,0.01816631
+Random Forest,original,classificacao_emprestimo_D,0.05111388
+Random Forest,original,classificacao_emprestimo_E,0.01199672
+Random Forest,original,classificacao_emprestimo_F,0.00333227
+Random Forest,original,classificacao_emprestimo_G,0.002209
+Random Forest,balanceado,idade,0.05091447
+Random Forest,balanceado,renda_anual,0.15349527
+Random Forest,balanceado,tempo_emprego,0.0561861
+Random Forest,balanceado,valor_emprestimo,0.08097433
+Random Forest,balanceado,taxa_juros_emprestimo,0.16811342
+Random Forest,balanceado,percentual_renda_emprestimo,0.20954819
+Random Forest,balanceado,historico_inadimplencia,0.01469437
+Random Forest,balanceado,duracao_historico_credito,0.04078579
+Random Forest,balanceado,residencia_hipoteca,0.04002008
+Random Forest,balanceado,residencia_outro,0.00061579
+Random Forest,balanceado,residencia_propria,0.0271207
+Random Forest,balanceado,intencao_emprestimo_educacao,0.0132804
+Random Forest,balanceado,intencao_emprestimo_empreendimento,0.01530732
+Random Forest,balanceado,intencao_emprestimo_medico,0.01018291
+Random Forest,balanceado,intencao_emprestimo_melhoria_residencial,0.01445624
+Random Forest,balanceado,intencao_emprestimo_pessoal,0.01107958
+Random Forest,balanceado,classificacao_emprestimo_B,0.00637592
+Random Forest,balanceado,classificacao_emprestimo_C,0.01612522
+Random Forest,balanceado,classificacao_emprestimo_D,0.05485907
+Random Forest,balanceado,classificacao_emprestimo_E,0.01156634
+Random Forest,balanceado,classificacao_emprestimo_F,0.00282296
+Random Forest,balanceado,classificacao_emprestimo_G,0.00147553
+XGBoost,original,idade,0.01165286
+XGBoost,original,renda_anual,0.03262474
+XGBoost,original,tempo_emprego,0.01976004
+XGBoost,original,valor_emprestimo,0.00959667
+XGBoost,original,taxa_juros_emprestimo,0.05679574
+XGBoost,original,percentual_renda_emprestimo,0.12509318
+XGBoost,original,historico_inadimplencia,0.00712569
+XGBoost,original,duracao_historico_credito,0.00830266
+XGBoost,original,residencia_hipoteca,0.11253935
+XGBoost,original,residencia_outro,0.01096149
+XGBoost,original,residencia_propria,0.15562351
+XGBoost,original,intencao_emprestimo_educacao,0.04631699
+XGBoost,original,intencao_emprestimo_empreendimento,0.05337203
+XGBoost,original,intencao_emprestimo_medico,0.05308958
+XGBoost,original,intencao_emprestimo_melhoria_residencial,0.05207454
+XGBoost,original,intencao_emprestimo_pessoal,0.05075885
+XGBoost,original,classificacao_emprestimo_B,0.01069344
+XGBoost,original,classificacao_emprestimo_C,0.08356135
+XGBoost,original,classificacao_emprestimo_D,0.05778024
+XGBoost,original,classificacao_emprestimo_E,0.00945306
+XGBoost,original,classificacao_emprestimo_F,0.00644777
+XGBoost,original,classificacao_emprestimo_G,0.02637639
+XGBoost,balanceado,idade,0.01574744
+XGBoost,balanceado,renda_anual,0.04455663
+XGBoost,balanceado,tempo_emprego,0.01767665
+XGBoost,balanceado,valor_emprestimo,0.01211192
+XGBoost,balanceado,taxa_juros_emprestimo,0.07542629
+XGBoost,balanceado,percentual_renda_emprestimo,0.12280625
+XGBoost,balanceado,historico_inadimplencia,0.01117684
+XGBoost,balanceado,duracao_historico_credito,0.01161746
+XGBoost,balanceado,residencia_hipoteca,0.08372889
+XGBoost,balanceado,residencia_outro,0.00613871
+XGBoost,balanceado,residencia_propria,0.11573546
+XGBoost,balanceado,intencao_emprestimo_educacao,0.04044574
+XGBoost,balanceado,intencao_emprestimo_empreendimento,0.08265618
+XGBoost,balanceado,intencao_emprestimo_medico,0.03466614
+XGBoost,balanceado,intencao_emprestimo_melhoria_residencial,0.0602645
+XGBoost,balanceado,intencao_emprestimo_pessoal,0.03394625
+XGBoost,balanceado,classificacao_emprestimo_B,0.02069609
+XGBoost,balanceado,classificacao_emprestimo_C,0.10588729
+XGBoost,balanceado,classificacao_emprestimo_D,0.06264531
+XGBoost,balanceado,classificacao_emprestimo_E,0.01058863
+XGBoost,balanceado,classificacao_emprestimo_F,0.00791548
+XGBoost,balanceado,classificacao_emprestimo_G,0.02356592
+LightGBM,original,idade,209.0
+LightGBM,original,renda_anual,797.0
+LightGBM,original,tempo_emprego,186.0
+LightGBM,original,valor_emprestimo,199.0
+LightGBM,original,taxa_juros_emprestimo,390.0
+LightGBM,original,percentual_renda_emprestimo,275.0
+LightGBM,original,historico_inadimplencia,8.0
+LightGBM,original,duracao_historico_credito,77.0
+LightGBM,original,residencia_hipoteca,152.0
+LightGBM,original,residencia_outro,9.0
+LightGBM,original,residencia_propria,141.0
+LightGBM,original,intencao_emprestimo_educacao,60.0
+LightGBM,original,intencao_emprestimo_empreendimento,82.0
+LightGBM,original,intencao_emprestimo_medico,78.0
+LightGBM,original,intencao_emprestimo_melhoria_residencial,83.0
+LightGBM,original,intencao_emprestimo_pessoal,55.0
+LightGBM,original,classificacao_emprestimo_B,26.0
+LightGBM,original,classificacao_emprestimo_C,46.0
+LightGBM,original,classificacao_emprestimo_D,57.0
+LightGBM,original,classificacao_emprestimo_E,24.0
+LightGBM,original,classificacao_emprestimo_F,15.0
+LightGBM,original,classificacao_emprestimo_G,31.0
+LightGBM,balanceado,idade,224.0
+LightGBM,balanceado,renda_anual,811.0
+LightGBM,balanceado,tempo_emprego,190.0
+LightGBM,balanceado,valor_emprestimo,189.0
+LightGBM,balanceado,taxa_juros_emprestimo,405.0
+LightGBM,balanceado,percentual_renda_emprestimo,237.0
+LightGBM,balanceado,historico_inadimplencia,7.0
+LightGBM,balanceado,duracao_historico_credito,97.0
+LightGBM,balanceado,residencia_hipoteca,148.0
+LightGBM,balanceado,residencia_outro,2.0
+LightGBM,balanceado,residencia_propria,141.0
+LightGBM,balanceado,intencao_emprestimo_educacao,59.0
+LightGBM,balanceado,intencao_emprestimo_empreendimento,83.0
+LightGBM,balanceado,intencao_emprestimo_medico,75.0
+LightGBM,balanceado,intencao_emprestimo_melhoria_residencial,80.0
+LightGBM,balanceado,intencao_emprestimo_pessoal,48.0
+LightGBM,balanceado,classificacao_emprestimo_B,23.0
+LightGBM,balanceado,classificacao_emprestimo_C,54.0
+LightGBM,balanceado,classificacao_emprestimo_D,61.0
+LightGBM,balanceado,classificacao_emprestimo_E,23.0
+LightGBM,balanceado,classificacao_emprestimo_F,10.0
+LightGBM,balanceado,classificacao_emprestimo_G,33.0

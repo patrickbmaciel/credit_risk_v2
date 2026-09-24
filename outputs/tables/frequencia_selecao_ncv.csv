@@ -1,0 +1,15 @@
+﻿id,modelo,estrategia,vezes_champion,vezes_challenger,papel_final
+logistica_original,Regressão Logística,original,0,0,
+logistica_balanceada,Regressão Logística,balanceado,0,0,
+arvore_original,Árvore de Decisão,original,0,0,
+arvore_balanceada,Árvore de Decisão,balanceado,0,0,
+naive_original,Gaussian Naive Bayes,original,0,0,
+naive_balanceado,Gaussian Naive Bayes,balanceado,0,0,
+knn_original,KNN,original,0,0,
+knn_balanceado,KNN,balanceado,0,0,
+forest_original,Random Forest,original,0,0,
+forest_balanceada,Random Forest,balanceado,0,0,
+xgboost_original,XGBoost,original,0,0,
+xgboost_balanceado,XGBoost,balanceado,3,7,champion
+lightgbm_original,LightGBM,original,0,0,
+lightgbm_balanceado,LightGBM,balanceado,7,3,challenger

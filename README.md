@@ -12,7 +12,7 @@ Antecipar a inadimplência é relevante porque uma aprovação indevida pode ger
 
 Foi utilizado o conjunto público [Credit Risk Dataset, do Kaggle](https://www.kaggle.com/datasets/laotse/credit-risk-dataset), com 32.581 registros e 12 variáveis sobre perfil do cliente, características do empréstimo e histórico de crédito.
 
-O primeiro script baixa o arquivo bruto, renomeia e recodifica as variáveis, remove registros com valores ausentes e outliers. A base processada contém 28.629 registros: 22.427 não inadimplentes e 6.202 inadimplentes, o que evidencia o desbalanceamento da classe positiva.
+O primeiro script baixa o arquivo bruto via API, renomeia e recodifica as variáveis, remove registros com valores ausentes e outliers. A base processada contém 28.629 registros: 22.427 não inadimplentes e 6.202 inadimplentes. A classe positiva representa 21,66% da amostra.
 
 A variável-alvo é `status_emprestimo`:
 
@@ -31,27 +31,66 @@ A variável-alvo é `status_emprestimo`:
 | XGBoost (100 árvores) | Constrói árvores sequencialmente, corrigindo os erros cometidos pelas anteriores. | Pesos amostrais calculados no treino. |
 | LightGBM (100 árvores) | Utiliza gradient boosting com crescimento eficiente das árvores. | Pesos amostrais calculados no treino. |
 
-Cada algoritmo foi treinado em duas versões: original e balanceada. Os dados foram divididos uma única vez, de forma estratificada, em treino (70%) e teste (30%), com `random_state=123`. As 14 versões foram avaliadas no mesmo teste desbalanceado, com 8.589 registros.
+Cada algoritmo foi treinado em duas versões, original e balanceada, totalizando 14 candidatos. Os hiperparâmetros foram mantidos fixos e o limiar de classificação utilizado foi 0,5.
 
-As variáveis categóricas foram transformadas por one-hot encoding, com a primeira categoria como referência. No KNN, as variáveis numéricas também foram normalizadas com Min-Max. Codificadores, escaladores, pesos e sobreamostragem foram ajustados ou aplicados somente no treino, evitando vazamento de dados. O limiar de classificação utilizado foi 0,5.
+As variáveis categóricas foram transformadas por one-hot encoding, com a primeira categoria como referência. No KNN, as variáveis numéricas também foram normalizadas com Min-Max.
 
-Além das métricas calculadas no limiar de 0,5 e da ROC AUC, a avaliação inclui a PR-AUC. Essa métrica resume a relação entre precisão e recall para diferentes limiares e é especialmente útil quando a classe positiva é menos frequente. Foi utilizada a Average Precision do scikit-learn, sem interpolação trapezoidal. Como referência, a proporção de inadimplentes no teste é de 21,67%.
+### 2.3 Nested cross-validation estratificado 10x5
 
-### 2.3 Avaliação financeira
+A seleção e a avaliação foram realizadas por nested cross-validation (nested CV) estratificado 10x5, sem holdout separado. O número 10 representa os folds do ciclo externo, usados para avaliar o desempenho fora da amostra, enquanto o número 5 representa os folds do ciclo interno, usados para comparar os 14 candidatos e selecionar champion e challenger.
+
+Em cada uma das dez rodadas externas, 90% dos registros formam o treino externo e os 10% restantes formam o teste externo. Dentro desses 90%, a validação interna de cinco folds realiza a seleção dos modelos sem consultar o teste externo. Depois da seleção interna, os candidatos são ajustados no treino externo e avaliados nos 10% reservados. A estratificação preserva aproximadamente a proporção de inadimplentes nos folds internos e externos. Codificadores, normalizadores, pesos e sobreamostragem são ajustados novamente e exclusivamente no treino de cada fold, evitando vazamento de dados.
+
+Essa abordagem foi escolhida porque separa a seleção da avaliação e reduz a dependência de uma única divisão aleatória. Diferentemente do holdout 70/30, todos os registros participam da avaliação externa, cada um exatamente uma vez, e os resultados dos folds permitem examinar a estabilidade dos modelos. Em contrapartida, o nested CV exige mais ajustes e maior tempo de processamento.
+
+O erro-padrão resume a incerteza da média obtida nos cinco folds internos e é calculado dividindo o desvio-padrão entre os folds pela raiz quadrada de cinco. O desvio-padrão mede quanto o desempenho varia entre os folds, enquanto o erro-padrão mede a precisão com que a média foi estimada.
+
+O champion é definido pela regra de um erro-padrão aplicada ao lucro por registro. Primeiro, identifica-se o maior lucro médio e usa-se o erro-padrão desse candidato para estabelecer o limite de elegibilidade. Permanecem na comparação os modelos cuja média esteja até um erro-padrão abaixo da melhor média. Entre eles, é escolhido o candidato com menor desvio-padrão do lucro. Assim, uma pequena vantagem média, potencialmente decorrente da divisão dos dados, não prevalece automaticamente sobre um modelo mais estável. Os desempates consideram a menor taxa de falsos negativos e o maior lucro médio.
+
+Depois da exclusão do champion, o challenger é definido de forma semelhante, mas com prioridade para a taxa de falsos negativos. São elegíveis os candidatos até um erro-padrão acima da menor taxa média de falsos negativos, e vence o candidato com menor dispersão dessa taxa. O lucro médio é usado como desempate.
+
+Uma previsão out-of-fold (OOF) é produzida para um registro por um modelo que não utilizou esse registro no treinamento. Ao reunir os dez testes externos, obtém-se uma previsão OOF para cada um dos 28.629 registros e para cada candidato. Essas previsões são usadas nas métricas, matrizes de confusão e curvas finais. Após a avaliação externa, uma nova validação interna de cinco folds sobre toda a base escolhe os modelos finais, que são reajustados em todos os registros somente para gerar coeficientes, importâncias, SHAP e visualizações das árvores.
+
+### 2.4 Métricas de desempenho
+
+A inadimplência (`1`) é a classe positiva. Com o limiar de classificação de 0,5, probabilidades iguais ou superiores a esse valor são classificadas como inadimplência. A matriz de confusão organiza os quatro resultados possíveis:
+
+| Resultado | Significado no projeto |
+|---|---|
+| Verdadeiro positivo (`TP`) | Cliente inadimplente corretamente identificado e empréstimo recusado. |
+| Verdadeiro negativo (`TN`) | Cliente adimplente corretamente identificado e empréstimo aprovado. |
+| Falso positivo (`FP`) | Cliente adimplente classificado como inadimplente e recusado incorretamente. |
+| Falso negativo (`FN`) | Cliente inadimplente classificado como adimplente e aprovado incorretamente. |
+
+As métricas calculadas a partir desses resultados e das probabilidades previstas são:
+
+| Métrica | Fórmula ou cálculo | Interpretação | Direção desejável |
+|---|---|---|---|
+| Acurácia | `(TP + TN) / total` | Proporção de classificações corretas entre todos os registros. | Maior |
+| Precisão | `TP / (TP + FP)` | Entre os clientes classificados como inadimplentes, proporção que realmente inadimpliu. | Maior |
+| Recall | `TP / (TP + FN)` | Entre os clientes realmente inadimplentes, proporção identificada pelo modelo. | Maior |
+| Taxa de falsos negativos | `FN / (FN + TP) = 1 − recall` | Proporção de inadimplentes não identificados e aprovados pelo modelo. | Menor |
+| F1-score | `2 x (precisão x recall) / (precisão + recall)` | Média harmônica que resume o equilíbrio entre precisão e recall. | Maior |
+| ROC AUC | Área sob a curva ROC | Capacidade de ordenar inadimplentes acima de adimplentes ao longo de diferentes limiares. | Maior |
+| PR-AUC | Average Precision ao longo da curva precisão-recall | Resume o equilíbrio entre identificar inadimplentes e evitar classificações positivas incorretas em diferentes limiares. | Maior |
+
+Acurácia, precisão, recall, taxa de falsos negativos e F1-score utilizam as classes definidas pelo limiar de 0,5. ROC AUC e PR-AUC utilizam diretamente as probabilidades e avaliam a ordenação dos clientes em diferentes limiares. No projeto, a PR-AUC corresponde à Average Precision calculada pelo `average_precision_score`.
+
+A acurácia isolada pode ocultar desempenho ruim na classe minoritária. Em risco de crédito, recall elevado e taxa de falsos negativos reduzida ajudam a evitar a aprovação de inadimplentes, enquanto a precisão ajuda a controlar recusas indevidas de clientes adimplentes. Uma ordenação aleatória produz ROC AUC próxima de 0,5. Na PR-AUC, a referência aproxima-se da prevalência da classe positiva, que é de 21,66% nesta base. Por isso, as métricas devem ser interpretadas em conjunto e complementadas pela avaliação financeira.
+
+### 2.5 Avaliação financeira
 
 O lucro estimado considera somente os empréstimos previstos como não inadimplentes, que seriam aprovados pelo modelo. Para um cliente realmente adimplente, o resultado corresponde ao valor do empréstimo multiplicado pela taxa de juros. Para um cliente inadimplente aprovado, considera-se a perda integral do principal. Empréstimos previstos como inadimplentes são recusados e têm resultado financeiro igual a zero.
 
-Essa é uma estimativa de um único período, em dólares. O cálculo não considera prazo, amortização, recuperação após inadimplência, custo de capital, despesas operacionais ou custo de oportunidade das recusas.
+Essa é uma estimativa de um único período, em dólares. O cálculo não considera prazo, amortização, recuperação após inadimplência, custo de capital, despesas operacionais ou custo de oportunidade das recusas. Na seleção interna, utiliza-se o lucro por registro para tornar comparáveis folds de tamanhos ligeiramente diferentes. Nos resultados finais, o lucro total OOF cobre toda a base processada.
 
-### 2.4 Pipeline
-
-O pipeline é composto por três etapas sequenciais:
+### 2.6 Pipeline
 
 | Ordem | Script | Responsabilidade | Principais artefatos |
 |---:|---|---|---|
 | 1 | `src/1_coleta_dados.py` | Baixar, validar, tratar e salvar os dados. | Base bruta, base processada, resumo do tratamento e estatísticas descritivas. |
 | 2 | `src/2_analise_exploratoria.py` | Explorar exclusivamente a base processada. | Frequências, correlações e quatro figuras exploratórias. |
-| 3 | `src/3_modelagens.py` | Preparar os dados, treinar 14 versões e avaliá-las. | Métricas, lucro, seleção champion-challenger, coeficientes, importâncias, gráfico de importâncias, matrizes de confusão, curvas ROC, curvas precisão-recall, comparação gráfica do lucro e árvores. |
+| 3 | `src/3_modelagens_ncv.py` | Executar o nested CV 10x5, comparar 14 candidatos e reajustar os modelos finais. | Métricas OOF, resultados por fold, seleção champion-challenger, coeficientes, importâncias, SHAP e figuras de avaliação. |
 
 Para instalar as dependências e executar o projeto a partir da raiz:
 
@@ -59,7 +98,7 @@ Para instalar as dependências e executar o projeto a partir da raiz:
 python -m pip install -r requirements.txt
 python src/1_coleta_dados.py
 python src/2_analise_exploratoria.py
-python src/3_modelagens.py
+python src/3_modelagens_ncv.py
 ```
 
 ## 3. Resultados
@@ -70,7 +109,7 @@ O tratamento removeu 3.943 registros com valores ausentes e outros nove pelos fi
 
 ![Distribuições das variáveis relacionadas aos empréstimos](outputs/figures/distribuicoes_emprestimos.png)
 
-Aluguel (50,81%) e hipoteca (41,21%) concentram 92,02% dos tipos de residência. As intenções de empréstimo são relativamente distribuídas, enquanto as classificações A e B representam 64,78% da base, enquanto as classes E, F e G são pouco frequentes.
+Aluguel (50,81%) e hipoteca (41,21%) concentram 92,02% dos tipos de residência. As intenções de empréstimo são relativamente distribuídas, enquanto as classificações A e B representam 64,78% da base e as classes E, F e G são pouco frequentes.
 
 ![Distribuições das variáveis categóricas](outputs/figures/distribuicoes_categoricas.png)
 
@@ -82,173 +121,173 @@ As taxas de juros cobradas crescem de forma consistente das classificações A a
 
 ![Taxa de juros por classificação do empréstimo](outputs/figures/taxa_juros_por_classificacao.png)
 
-### 3.2 Resultados dos modelos
+### 3.2 Resultados out-of-fold dos modelos
 
-- Regressão Logística: a versão original apresenta recall baixo (25,90%). O balanceamento eleva o recall para 77,38% e reduz os falsos negativos de 1.379 para 421, mas aumenta os falsos positivos de 124 para 1.961.
-- Árvore de Decisão: as duas versões têm desempenho semelhante. O balanceamento melhora discretamente acurácia, precisão, F1-score, ROC AUC e lucro, mas aumenta os falsos negativos de 451 para 458.
-- Gaussian Naive Bayes: o balanceamento eleva o recall de 27,14% para 74,48% e reduz os falsos negativos de 1.356 para 475. Em contrapartida, a precisão cai para 38,17% e os falsos positivos chegam a 2.245; a ROC AUC permanece em 78,44%.
-- KNN: a versão original oferece maior precisão e F1-score. A versão balanceada reduz os falsos negativos de 717 para 459 e eleva o recall para 75,34%, com perda relevante de precisão, acurácia e ROC AUC.
-- Random Forest: a versão original tem maior acurácia, precisão, F1-score e ROC AUC, enquanto a balanceada reduz os falsos negativos de 505 para 456 e aumenta o lucro de 2.209.972,85 para 2.540.361,69.
-- XGBoost: a versão original alcança acurácia de 93,54% e ROC AUC de 94,55%. A balanceada reduz os falsos negativos de 493 para 377, obtém recall de 79,74% e apresenta o maior lucro estimado, de 3.031.737,10.
-- LightGBM: a versão original registra a maior precisão (96,90%), a maior ROC AUC (94,85%) e a maior PR-AUC (90,25%) da comparação. A balanceada reduz os falsos negativos de 518 para 403 e alcança lucro de 2.768.269,27.
+- Regressão Logística: o balanceamento eleva o recall de 22,80% para 77,14% e reduz os falsos negativos de 4.788 para 1.418. Em contrapartida, a precisão cai para 42,59% e os falsos positivos aumentam para 6.449.
+- Árvore de Decisão: as duas versões apresentam resultados próximos. A original obtém maior recall, PR-AUC e lucro, enquanto a balanceada registra acurácia e precisão discretamente maiores.
+- Gaussian Naive Bayes: o balanceamento aumenta o recall de 27,56% para 75,57% e reduz os falsos negativos, mas as duas versões apresentam lucro negativo. ROC AUC e PR-AUC permanecem praticamente inalteradas.
+- KNN: a versão original tem maior acurácia, precisão, F1-score, ROC AUC e PR-AUC. A versão balanceada reduz os falsos negativos de 2.381 para 1.474 e transforma o lucro total de negativo para positivo.
+- Random Forest: a versão original lidera acurácia, precisão, F1-score e PR-AUC dentro do algoritmo. A balanceada aumenta recall e lucro, alcançando 7,83 milhões de dólares.
+- XGBoost: a versão original apresenta o maior F1-score, ROC AUC e PR-AUC da comparação. A balanceada reduz os falsos negativos para 1.241, atinge recall de 79,99% e produz o maior lucro OOF, de 9,62 milhões de dólares.
+- LightGBM: a versão original alcança a maior acurácia e precisão. A balanceada reduz os falsos negativos para 1.264, obtém recall de 79,62% e lucro de 9,41 milhões de dólares.
 
-Nas Árvores de Decisão e Random Forests, destacam-se `percentual_renda_emprestimo`, `taxa_juros_emprestimo` e `renda_anual`. No XGBoost, também aparecem categorias de residência e classificação do empréstimo, enquanto no LightGBM se destacam renda, taxa de juros e valor do empréstimo. As importâncias são calculadas de forma e em escalas diferentes entre os algoritmos; devem ser comparadas dentro de cada modelo e não indicam direção do efeito nem causalidade.
+As matrizes e curvas abaixo utilizam exclusivamente previsões externas OOF.
 
-Mais detalhes:
 <details>
 <summary>Regressão Logística: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão da Regressão Logística](outputs/figures/matriz_confusao_regressao_logistica.png)
+![Matrizes de confusão OOF da Regressão Logística](outputs/figures/matriz_confusao_regressao_logistica_ncv.png)
 
-![Curvas ROC da Regressão Logística](outputs/figures/curva_roc_regressao_logistica.png)
+![Curvas ROC OOF da Regressão Logística](outputs/figures/curva_roc_regressao_logistica_ncv.png)
 
 </details>
 
 <details>
 <summary>Árvore de Decisão: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão da Árvore de Decisão](outputs/figures/matriz_confusao_arvore_decisao.png)
+![Matrizes de confusão OOF da Árvore de Decisão](outputs/figures/matriz_confusao_arvore_decisao_ncv.png)
 
-![Curvas ROC da Árvore de Decisão](outputs/figures/curva_roc_arvore_decisao.png)
+![Curvas ROC OOF da Árvore de Decisão](outputs/figures/curva_roc_arvore_decisao_ncv.png)
 
 </details>
 
 <details>
 <summary>Gaussian Naive Bayes: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão do Gaussian Naive Bayes](outputs/figures/matriz_confusao_naive_bayes.png)
+![Matrizes de confusão OOF do Gaussian Naive Bayes](outputs/figures/matriz_confusao_naive_bayes_ncv.png)
 
-![Curvas ROC do Gaussian Naive Bayes](outputs/figures/curva_roc_naive_bayes.png)
+![Curvas ROC OOF do Gaussian Naive Bayes](outputs/figures/curva_roc_naive_bayes_ncv.png)
 
 </details>
 
 <details>
 <summary>KNN: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão do KNN](outputs/figures/matriz_confusao_knn.png)
+![Matrizes de confusão OOF do KNN](outputs/figures/matriz_confusao_knn_ncv.png)
 
-![Curvas ROC do KNN](outputs/figures/curva_roc_knn.png)
+![Curvas ROC OOF do KNN](outputs/figures/curva_roc_knn_ncv.png)
 
 </details>
 
 <details>
 <summary>Random Forest: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão da Random Forest](outputs/figures/matriz_confusao_random_forest.png)
+![Matrizes de confusão OOF da Random Forest](outputs/figures/matriz_confusao_random_forest_ncv.png)
 
-![Curvas ROC da Random Forest](outputs/figures/curva_roc_random_forest.png)
+![Curvas ROC OOF da Random Forest](outputs/figures/curva_roc_random_forest_ncv.png)
 
 </details>
 
 <details>
 <summary>XGBoost: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão do XGBoost](outputs/figures/matriz_confusao_xgboost.png)
+![Matrizes de confusão OOF do XGBoost](outputs/figures/matriz_confusao_xgboost_ncv.png)
 
-![Curvas ROC do XGBoost](outputs/figures/curva_roc_xgboost.png)
+![Curvas ROC OOF do XGBoost](outputs/figures/curva_roc_xgboost_ncv.png)
 
 </details>
 
 <details>
 <summary>LightGBM: matriz de confusão e curva ROC</summary>
 
-![Matrizes de confusão do LightGBM](outputs/figures/matriz_confusao_lightgbm.png)
+![Matrizes de confusão OOF do LightGBM](outputs/figures/matriz_confusao_lightgbm_ncv.png)
 
-![Curvas ROC do LightGBM](outputs/figures/curva_roc_lightgbm.png)
+![Curvas ROC OOF do LightGBM](outputs/figures/curva_roc_lightgbm_ncv.png)
 
 </details>
 
 <details>
-<summary>Árvores de Decisão: três primeiros níveis</summary>
+<summary>Árvores de Decisão: três primeiros níveis do ajuste final</summary>
 
-![Comparação das Árvores de Decisão](outputs/figures/arvores_decisao.png)
+![Comparação das Árvores de Decisão reajustadas](outputs/figures/arvores_decisao_ncv.png)
 
 </details>
 
 ### 3.3 Curvas precisão-recall comparativas
 
-A curva precisão-recall avalia o desempenho do modelo em diferentes limiares de classificação. Ela relaciona a proporção de inadimplentes corretamente identificados (recall) à proporção de clientes classificados como inadimplentes que realmente pertencem a essa classe (precisão). Essa análise é especialmente importante quando a classe de interesse é menos frequente, pois evidencia o equilíbrio entre identificar mais inadimplentes e evitar que clientes adimplentes sejam classificados incorretamente. Quanto mais a curva permanecer próxima da parte superior do gráfico, melhor é o desempenho do modelo.
+A curva precisão-recall relaciona a proporção de inadimplentes corretamente identificados à proporção de clientes classificados como inadimplentes que realmente pertencem a essa classe. Ela é especialmente informativa diante do desbalanceamento da variável-alvo.
 
-Os resultados mostram que o efeito do balanceamento varia entre os algoritmos. A PR-AUC, que resume o desempenho do modelo ao longo da curva precisão–recall, aumenta nas Regressões Logísticas e nas Árvores de Decisão, apresenta uma melhora discreta no XGBoost, permanece inalterada no Naive Bayes e diminui no KNN, no Random Forest e no LightGBM. Apesar dessas diferenças, os modelos de boosting e o Random Forest continuam entre os melhores nas estratégias original e balanceada.
+Os modelos de boosting e a Random Forest apresentam as maiores PR-AUCs nas duas estratégias. O balanceamento aumenta o recall no limiar de 0,5, mas não necessariamente melhora a PR-AUC, pois essa métrica avalia a ordenação dos clientes ao longo de diferentes limiares.
 
-Como o balanceamento atribui maior importância à classe inadimplente durante o treinamento, o modelo tende a identificar mais inadimplentes no limiar de 0,5. Porém, isso não garante uma PR-AUC maior. Métricas como precisão, recall e falsos negativos são calculadas para um limiar específico, enquanto a PR-AUC avalia a capacidade do modelo de ordenar os clientes por risco considerando diferentes limiares. Assim, um modelo pode aumentar o recall em 0,5 e, ao mesmo tempo, apresentar uma PR-AUC menor caso essa mudança reduza sua precisão ou prejudique a ordenação geral das probabilidades.
+![Curvas precisão-recall OOF por estratégia](outputs/figures/curvas_pr_por_estrategia_ncv.png)
 
-![Curvas precisão-recall separadas por estratégia](outputs/figures/curvas_pr_por_estrategia.png)
+![Curvas precisão-recall OOF dos modelos finais](outputs/figures/curvas_pr_modelos_destacados_ncv.png)
 
 ### 3.4 Comparação do lucro estimado
 
-O gráfico a seguir conecta os lucros das estratégias original e balanceada de cada algoritmo, permitindo observar tanto a direção quanto a magnitude da mudança. O balanceamento aumenta o lucro estimado em todos os modelos avaliados. O XGBoost balanceado apresenta o maior resultado, com 3,03 milhões de dólares, seguido pelo LightGBM balanceado, com 2,77 milhões, e pelo Random Forest balanceado, com 2,54 milhões.
+O balanceamento melhora substancialmente o resultado financeiro da Regressão Logística, do Gaussian Naive Bayes, do KNN, da Random Forest e dos modelos de boosting. Nas Árvores de Decisão, a versão original apresenta lucro superior.
 
-A mudança mais expressiva ocorre na Regressão Logística, cujo lucro passa de aproximadamente -7,57 milhões para 0,34 milhão de dólares. O Gaussian Naive Bayes também reduz substancialmente a perda estimada, de -6,72 milhões para -0,39 milhão, mas permanece com resultado negativo. Essas diferenças mostram que o efeito financeiro do balanceamento depende do comportamento de cada algoritmo e da combinação entre empréstimos aprovados, juros recebidos e perdas com inadimplência.
+O XGBoost balanceado registra o maior lucro OOF, com 9,62 milhões de dólares, equivalente a 335,90 dólares por registro. O LightGBM balanceado vem em seguida, com 9,41 milhões e 328,81 dólares por registro. Como os valores agregam previsões OOF para toda a base, não devem ser comparados diretamente aos lucros calculados anteriormente sobre um teste de 30%.
 
-![Efeito da estratégia no lucro estimado](outputs/figures/lucro_pontos_conectados.png)
+![Efeito da estratégia no lucro OOF](outputs/figures/lucro_pontos_conectados_ncv.png)
 
 ### 3.5 Avaliação dos modelos
 
-As métricas e os lucros abaixo foram calculados no mesmo conjunto de teste. FP representa um cliente adimplente recusado, enquanto FN representa um cliente inadimplente aprovado. A PR-AUC foi calculada a partir das probabilidades da classe inadimplente.
+FP representa um cliente adimplente recusado e FN representa um cliente inadimplente aprovado. Para cada candidato, as previsões dos dez testes externos são reunidas em um único conjunto com 28.629 previsões OOF. Cada registro aparece uma vez, sempre previsto por um modelo que não o utilizou no treinamento. As métricas da tabela são então calculadas uma única vez sobre esse conjunto completo. Por isso, as células de cada matriz de confusão somam 28.629 observações.
 
-| Modelo | Estratégia | FP | FN | Lucro estimado ($) | Acurácia | Precisão | Recall | F1-score | ROC AUC | PR-AUC |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Regressão Logística | Original | 124 | 1.379 | -7.570.532,98 | 82,50% | 79,54% | 25,90% | 39,08% | 79,21% | 58,34% |
-| Regressão Logística | Balanceada | 1.961 | 421 | 342.134,76 | 72,27% | 42,34% | 77,38% | 54,73% | 82,08% | 59,79% |
-| Árvore de Decisão | Original | 480 | 451 | 2.212.771,58 | 89,16% | 74,60% | 75,77% | 75,18% | 84,32% | 61,77% |
-| Árvore de Decisão | Balanceada | 438 | 458 | 2.295.423,35 | 89,57% | 76,21% | 75,39% | 75,80% | 84,44% | 62,79% |
-| Gaussian Naive Bayes | Original | 209 | 1.356 | -6.722.119,54 | 81,78% | 70,73% | 27,14% | 39,22% | 78,44% | 53,72% |
-| Gaussian Naive Bayes | Balanceada | 2.245 | 475 | -386.512,82 | 68,33% | 38,17% | 74,48% | 50,47% | 78,44% | 53,72% |
-| KNN | Original | 186 | 717 | 82.677,71 | 89,49% | 86,02% | 61,47% | 71,70% | 85,94% | 73,93% |
-| KNN | Balanceada | 1.203 | 459 | 1.375.092,91 | 80,65% | 53,82% | 75,34% | 62,79% | 84,42% | 64,06% |
-| Random Forest | Original | 75 | 505 | 2.209.972,85 | 93,25% | 94,76% | 72,86% | 82,38% | 93,20% | 88,03% |
-| Random Forest | Balanceada | 178 | 456 | 2.540.361,69 | 92,62% | 88,76% | 75,50% | 81,59% | 93,33% | 87,89% |
-| XGBoost | Original | 62 | 493 | 2.388.590,97 | **93,54%** | 95,66% | 73,51% | **83,14%** | 94,55% | 90,00% |
-| XGBoost | Balanceada | 281 | **377** | **3.031.737,10** | 92,34% | 84,08% | **79,74%** | 81,85% | 94,47% | 90,06% |
-| LightGBM | Original | **43** | 518 | 2.142.829,68 | 93,47% | **96,90%** | 72,17% | 82,72% | **94,85%** | **90,25%** |
-| LightGBM | Balanceada | 326 | 403 | 2.768.269,27 | 91,51% | 81,73% | 78,34% | 80,00% | 94,50% | 89,70% |
+Essas métricas OOF agregadas representam o desempenho global por registro e não são médias simples das métricas dos dez folds. As médias e os desvios-padrão por fold têm outra função: mostram o desempenho típico e sua estabilidade entre diferentes amostras de teste. As duas leituras são complementares. A coluna de lucro por registro permite comparar a escala financeira independentemente do tamanho da amostra, enquanto o lucro OOF total, por abranger toda a base, não deve ser comparado diretamente ao lucro do antigo teste de 30%.
 
-O XGBoost balanceado apresenta simultaneamente o maior lucro, o menor número de falsos negativos e o maior recall. O LightGBM original lidera precisão, ROC AUC e PR-AUC, mas seu lucro é menor e ele deixa mais inadimplentes sem identificação. Sua PR-AUC de 90,25% é seguida de perto pelos 90,06% do XGBoost balanceado, ambos muito acima da prevalência de 21,67% da classe positiva.
+| Modelo | Estratégia | FP | FN | Lucro OOF ($) | Lucro/registro ($) | Acurácia | Precisão | Recall | F1-score | ROC AUC | PR-AUC |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Regressão Logística | Original | 414 | 4.788 | -26.398.602,14 | -922,09 | 81,83% | 77,35% | 22,80% | 35,22% | 79,07% | 57,58% |
+| Regressão Logística | Balanceada | 6.449 | 1.418 | 964.233,68 | 33,68 | 72,52% | 42,59% | 77,14% | 54,88% | 81,95% | 59,93% |
+| Árvore de Decisão | Original | 1.714 | 1.446 | 7.023.847,86 | 245,34 | 88,96% | 73,51% | 76,68% | 75,06% | 84,52% | 61,42% |
+| Árvore de Decisão | Balanceada | 1.555 | 1.519 | 6.414.297,71 | 224,05 | 89,26% | 75,07% | 75,51% | 75,29% | 84,29% | 61,99% |
+| Gaussian Naive Bayes | Original | 746 | 4.493 | -23.259.707,55 | -812,45 | 81,70% | 69,61% | 27,56% | 39,48% | 77,98% | 53,28% |
+| Gaussian Naive Bayes | Balanceada | 7.993 | 1.515 | -1.681.351,89 | -58,73 | 66,79% | 36,96% | 75,57% | 49,65% | 77,98% | 53,28% |
+| KNN | Original | 645 | 2.381 | -90.147,45 | -3,15 | 89,43% | 85,56% | 61,61% | 71,63% | 86,51% | 74,67% |
+| KNN | Balanceado | 3.894 | 1.474 | 4.960.090,81 | 173,25 | 81,25% | 54,84% | 76,23% | 63,79% | 85,16% | 65,50% |
+| Random Forest | Original | 235 | 1.695 | 6.472.265,56 | 226,07 | 93,26% | 95,04% | 72,67% | 82,36% | 93,15% | 88,14% |
+| Random Forest | Balanceada | 653 | 1.505 | 7.830.974,97 | 273,53 | 92,46% | 87,79% | 75,73% | 81,32% | 93,29% | 88,09% |
+| XGBoost | Original | 234 | 1.631 | 7.354.210,02 | 256,88 | 93,49% | 95,13% | 73,70% | **83,06%** | **94,73%** | **90,28%** |
+| XGBoost | Balanceado | 1.145 | **1.241** | **9.616.407,55** | **335,90** | 91,67% | 81,25% | **79,99%** | 80,61% | 94,71% | 90,17% |
+| LightGBM | Original | **145** | 1.718 | 6.556.814,78 | 229,03 | **93,49%** | **96,87%** | 72,30% | 82,80% | 94,70% | 90,09% |
+| LightGBM | Balanceado | 1.180 | 1.264 | 9.413.362,18 | 328,81 | 91,46% | 80,71% | 79,62% | 80,16% | 94,70% | 89,97% |
 
 ### 3.6 Seleção dos modelos
 
-Para organizar a seleção dos modelos, adota-se a estratégia champion-challenger (campeão-desafiante). Nessa abordagem, o modelo champion funciona como referência, enquanto o challenger é mantido como alternativa para comparação, monitoramento e eventual substituição.
+Nos dez ciclos externos, somente XGBoost balanceado e LightGBM balanceado foram selecionados. O LightGBM ocupou o papel de champion em sete folds e de challenger em três. O XGBoost foi champion em três e challenger em sete. Essa alternância mostra que os dois modelos apresentam desempenho próximo e que a regra de um erro-padrão evita definir o vencedor apenas pela maior média observada em uma partição.
 
-Sendo assim:
+Na validação interna final sobre toda a base:
 
-- Champion: o XGBoost balanceado maximiza o lucro estimado, com 3,03 milhões de dólares. Também registra 377 falsos negativos, recall de 79,74%, ROC AUC de 94,47% e PR-AUC de 90,06%.
-- Challenger: excluído o champion, o LightGBM balanceado apresenta o menor número de falsos negativos, com 403 casos. Seu lucro estimado é de 2,77 milhões de dólares, com recall de 78,34%, ROC AUC de 94,50% e PR-AUC de 89,70%.
+- Champion: XGBoost balanceado. Nas previsões OOF, apresenta o maior lucro, de 9,62 milhões de dólares, o menor número de falsos negativos, com 1.241 casos, e o maior recall, de 79,99%. O lucro por registro entre os dez folds externos tem média de 335,90 dólares e desvio-padrão de 39,24.
+- Challenger: LightGBM balanceado. Apresenta lucro OOF de 9,41 milhões de dólares, 1.264 falsos negativos e recall de 79,62%. O lucro por registro tem média externa de 328,81 dólares e desvio-padrão de 51,21.
 
-O champion supera o challenger em 263.467,83 dólares e registra 26 falsos negativos a menos. O challenger permanece como alternativa distinta para comparação, contingência e monitoramento do desempenho fora da amostra.
+O champion supera o challenger em 203,05 mil dólares no lucro OOF agregado e registra 23 falsos negativos a menos. Ao mesmo tempo, a alternância observada nos folds externos justifica manter o LightGBM como alternativa para comparação, contingência e monitoramento.
+
+Os detalhes estão disponíveis em `metricas_folds_ncv.csv`, `selecao_folds_ncv.csv` e `frequencia_selecao_ncv.csv`.
 
 ### 3.7 Importâncias das variáveis
 
-O gráfico abaixo apresenta as dez variáveis mais importantes do XGBoost balanceado, modelo selecionado como champion. As principais são o percentual da renda comprometida com o empréstimo, a posse de imóvel próprio e a classificação de crédito C. Elas podem refletir a capacidade de pagamento, a estabilidade patrimonial e o risco de crédito do cliente.
+O gráfico apresenta as dez variáveis mais importantes do XGBoost balanceado reajustado em toda a base. Destacam-se o percentual da renda comprometida com o empréstimo, a posse de imóvel próprio, a classificação de crédito C, a existência de hipoteca, a finalidade de empreendimento e a taxa de juros.
 
-Também se destacam a finalidade do empréstimo, a existência de hipoteca e a taxa de juros. A feature importance mostra a contribuição das variáveis para o modelo, mas não indicam a direção do efeito nem comprovam causalidade.
+As importâncias são calculadas de forma diferente entre algoritmos, devem ser comparadas dentro de cada modelo e não indicam direção do efeito nem causalidade.
 
-![Importâncias das variáveis do XGBoost balanceado](outputs/figures/importancias_xgboost_balanceado_top10.png)
+![Importâncias do XGBoost balanceado no ajuste final](outputs/figures/importancias_xgboost_balanceado_top10_ncv.png)
 
 ### 3.8 Interpretabilidade do modelo
 
-O SHAP aprofunda a feature importance ao apresentar não apenas quais variáveis mais influenciam o XGBoost balanceado, mas também a direção e a intensidade de seus efeitos. Cada ponto representa um empréstimo do conjunto de teste. Valores SHAP positivos aumentam o risco de inadimplência estimado pelo modelo, enquanto valores negativos o reduzem.
+O SHAP aprofunda a análise ao apresentar a direção e a intensidade da contribuição das variáveis para as previsões do XGBoost balanceado reajustado. Cada ponto representa um registro. A posição horizontal mostra a contribuição da variável: valores SHAP positivos aumentam a saída do modelo associada ao risco de inadimplência e valores negativos a reduzem. Quanto mais distante de zero, maior o impacto daquela variável na previsão. As variáveis são ordenadas pelo impacto absoluto médio.
 
-As cores representam o valor observado da variável em cada cliente. Rosa indica valores mais altosa, enquanto azul indica valores mais baixos. Em variáveis binárias, como possuir imóvel próprio, rosa representa a presença da característica e azul sua ausência. A posição horizontal mostra o efeito sobre a previsão, à direita aumenta o risco estimado e à esquerda o reduz.
+As cores representam o valor observado da variável: rosa indica valores mais altos e azul valores mais baixos. Em variáveis binárias, rosa representa a presença e azul a ausência da característica. Os valores SHAP são contribuições para a saída do modelo e não devem ser interpretados diretamente como variações em pontos percentuais da probabilidade.
 
-A taxa de juros, a renda anual e o percentual da renda comprometida com o empréstimo apresentam os maiores impactos médios. Taxas de juros e percentuais de comprometimento mais altos tendem a elevar o risco previsto, enquanto rendas mais altas tendem a reduzi-lo. Também se observa que a classificação de crédito D aumenta o risco estimado. Imóvel próprio, hipoteca e empréstimos destinados a empreendimento ou educação aparecem associados à redução do risco.
+Os principais padrões indicam que taxas de juros e percentuais da renda comprometidos com o empréstimo mais altos elevam o risco previsto, enquanto rendas anuais mais altas o reduzem. Valores maiores de empréstimo e a classificação de crédito D também tendem a aumentar o risco. Imóvel próprio, hipoteca e empréstimos destinados a empreendimento ou educação aparecem associados à redução do risco previsto. Esses efeitos podem refletir relações não lineares e interações aprendidas pelo XGBoost.
 
-A ordem difere da feature importance porque as duas medidas respondem a perguntas distintas. A importância resume o uso das variáveis nas árvores, enquanto o SHAP mede o impacto de cada variável sobre as previsões individuais. Ambas não representam causalidade.
+Como o gráfico utiliza o modelo reajustado e toda a base transformada, ele é um artefato de interpretação do modelo final, e não uma nova avaliação OOF. Os padrões descrevem associações utilizadas pelo modelo e não comprovam relações causais.
 
-![SHAP do XGBoost balanceado](outputs/figures/shap_xgboost_balanceado.png)
+![SHAP do XGBoost balanceado no ajuste final](outputs/figures/shap_xgboost_balanceado_ncv.png)
 
 ## 4. Considerações
 
-Os resultados mostram que não existe um único modelo superior em todos os critérios. O XGBoost balanceado foi escolhido como champion porque maximiza o lucro estimado e, nesta amostra, também identifica a maior proporção de inadimplentes. O LightGBM original lidera precisão, ROC AUC e PR-AUC. A decisão final deve refletir o resultado financeiro e os tipos de erro, e não apenas a acurácia.
+O nested cross-validation separa a seleção interna da avaliação externa e reduz a dependência de uma única divisão aleatória. Os resultados confirmam a proximidade entre XGBoost e LightGBM balanceados e fornecem medidas de dispersão e frequência de seleção que não estavam disponíveis em um holdout simples.
 
-Nesse cenário, recomenda-se acompanhar especialmente o percentual da renda comprometida, a taxa de juros e a renda anual, além de criar uma faixa de revisão manual para casos próximos ao limiar de decisão. Essas variáveis são úteis para priorização analítica, mas não devem ser interpretadas isoladamente nem como causas da inadimplência.
+Ainda não existe um modelo superior em todos os critérios. O XGBoost balanceado foi escolhido como champion por combinar resultado financeiro, estabilidade e identificação de inadimplentes. O XGBoost original lidera F1-score, ROC AUC e PR-AUC, enquanto o LightGBM original apresenta a maior precisão.
 
-Entre os próximos passos mapeados, estão:
+Entre os próximos passos estão:
 
 - incorporar prazo, recuperação, custo de capital e despesas à avaliação financeira;
-- otimizar o limiar de classificação com base no lucro e nos falsos negativos;
-- aplicar validação cruzada e validação temporal, além de ajustar hiperparâmetros;
+- otimizar o limiar de classificação dentro dos folds internos;
 - avaliar calibração das probabilidades, explicabilidade e desempenho por subgrupos;
 - testar os modelos em dados externos e monitorar estabilidade e degradação ao longo do tempo.
 
-As principais limitações são o uso de um dataset público sem validação externa, a exclusão completa dos registros com valores ausentes, a avaliação e a seleção em uma única divisão treino-teste e o limiar fixo de 0,5. O lucro é uma aproximação de um período com perda integral em caso de inadimplência e sem outros custos ou recuperações. Além disso, as importâncias nativas podem favorecer determinadas variáveis, não são diretamente comparáveis entre algoritmos e não representam efeitos causais.
+As principais limitações são o uso de um dataset público sem dimensão temporal nem validação externa, a exclusão completa dos registros com valores ausentes e o limiar fixo de 0,5. O nested CV reduz o viés de seleção interno, mas não mede mudança temporal ou representatividade em outra carteira. O lucro continua sendo uma aproximação de um período com perda integral em caso de inadimplência e sem outros custos ou recuperações. As importâncias e valores SHAP descrevem associações do modelo e não representam efeitos causais.
